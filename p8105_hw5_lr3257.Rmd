@@ -221,8 +221,6 @@ city_prop = function(city){
   return(city_results)
   
 }
-
-city_prop("Baltimore, MD")
 ```
 
 ```{r, warning = FALSE}
@@ -236,8 +234,20 @@ city_prop_df =
 city_prop_df
 ```
 
-Create a plot that shows the estimates and CIs for each city – check out geom_errorbar for a way to add error bars based on the upper and lower limits. Organize cities according to the proportion of unsolved homicides.
+- Create a plot that shows the estimates and CIs for each city – check out geom_errorbar for a way to add error bars based on the upper and lower limits. Organize cities according to the proportion of unsolved homicides.
 
+```{r}
+city_prop_df |>
+  filter(estimate != 0) |>
+  ggplot(aes(x = reorder(city_state, estimate), y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1)) +
+  labs(
+    title = "Proportion of Unsolved Homicides by City", 
+    x = "City", y = "Estimated Proportion of Unsolved Homicides"
+  )
+```
 
 
 
