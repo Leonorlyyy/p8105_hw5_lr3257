@@ -73,7 +73,170 @@ bday_df |>
   )
 ```
 
-As the graph shows, the probability of having at least two people sharing the same birthday increases sharply as the group size increases at first until it hits 50%. After this, the growth slows down as it approaches 100% but does not fully reach it. 
+As the graph shows, initially, the probability of having at least two people sharing the same birthday increases sharply as the group size increases until it hits 50%. After this, the growth slows down as it approaches 100% but does not fully reach it. 
+
+## Problem 2
+
+```{r}
+n = 30
+sigma = 5
+prob_rejected = c()
+ave_estimate = c()
+ave_estimate_rejected = c()
+
+for (mu in 0:6){
+  
+  num_rejected = 0
+  sum_estimate = 0
+  sum_estimate_rejected = 0
+  
+  for (j in 1:5000){
+    
+    normal_df = rnorm(n, mu, sigma)
+    
+    results = t.test(normal_df)|>
+      broom::tidy()
+    
+    estimate = results[["estimate"]]
+    p_value = results[["p.value"]]
+    sum_estimate = sum_estimate + estimate
+    
+    if(p_value < 0.05){
+      num_rejected = num_rejected + 1
+      sum_estimate_rejected = sum_estimate_rejected + estimate
+    }
+  }
+  prob_rejected = c(prob_rejected, num_rejected/5000)
+  
+  ave_estimate = c(ave_estimate, sum_estimate/5000)
+  
+  ave_estimate_rejected = c(ave_estimate_rejected, sum_estimate_rejected/num_rejected)
+}
+```
+
+```{r}
+tru_mu = 0:6
+
+norm_df = data.frame(tru_mu, prob_rejected)
+
+norm_df |>
+  ggplot(aes(x = tru_mu, y = prob_rejected)) +
+  geom_point() + 
+  geom_smooth(size = 0.5, se = FALSE) +
+  labs(
+    title = "Scatterplot of True Mean versus Power of Test",
+    x = "True Mean", 
+    y = "Power of Test"
+  )
+```
+
+The plot shows that as the true mean increases, the power of the test also increases, with a trend of increasing sharply first and slows down as the true mean becomes substantially large. This shows that a larger effect size (true mean being further away from the hypothesized mean) makes it easier to reject the null hypothesis, which increases the power of the test. 
+
+```{r}
+norm_df2 = data.frame(tru_mu, ave_estimate)
+
+norm_df2 |>
+  ggplot(aes(x = tru_mu, y = ave_estimate)) +
+  geom_point() + 
+  geom_smooth(size = 0.5, se = FALSE) +
+  labs(
+    title = "Scatterplot of True Mean versus Average Estimated Mean",
+    x = "True Mean", 
+    y = "Estimated Mean"
+  )
+
+norm_df3 = data.frame(tru_mu, ave_estimate_rejected)
+
+norm_df3 |>
+  ggplot(aes(x = tru_mu, y = ave_estimate_rejected)) +
+  geom_point() + 
+  geom_smooth(size = 0.5, se = FALSE) +
+  labs(
+    title = "Scatterplot of True Mean versus Average Estimated Mean when Reject Null",
+    x = "True Mean", 
+    y = "Estimated Mean when Reject Null"
+  )
+```
+
+The average estimate of mean when the null is rejected is close to the true mean, but not as close as the overall average estimate of mean. In fact, the line of the average estimated mean of rejected null is slightly higher at each point than the line of the overall average estimated mean. This may be due to the exclusion of fail to reject nulls (with small mean equals to 0) lead the sample means to be more extreme, making the estimated means larger than the true means. 
+
+## Problem 3
+
+Import dataset
+
+```{r}
+homicide_df = read.csv("data/homicide-data.csv")
+```
+
+- Describe the raw data. Create a city_state variable (e.g. “Baltimore, MD”) and then summarize within cities to obtain the total number of homicides and the number of unsolved homicides (those for which the disposition is “Closed without arrest” or “Open/No arrest”).
+
+The dataset has `r nrow(homicide_df)` observations and `r ncol(homicide_df)` variables. Important variables include reported_date, victim age, sex, and race, city, state, and disposition. 
+
+```{r}
+homicide_df = homicide_df |>
+  mutate(
+    city_state = paste(city, state, sep = ", "))
+
+homicide_df |>
+  group_by(city_state) |>
+  summarise(
+    total_homicides = n(),
+    unsolved_homicides = sum(disposition %in% c("Closed without arrest", "Open/No arrest"))
+  )
+```
+
+- For the city of Baltimore, MD, use the prop.test function to estimate the proportion of homicides that are unsolved; save the output of prop.test as an R object, apply the broom::tidy to this object and pull the estimated proportion and confidence intervals from the resulting tidy dataframe.
+
+```{r}
+baltimore_df = homicide_df |>
+  filter(city_state == "Baltimore, MD")
+
+baltimore_total = nrow(baltimore_df)
+baltimore_unsolved = sum(baltimore_df$disposition %in% c("Closed without arrest", "Open/No arrest"))
+
+baltimore_prop = prop.test(baltimore_unsolved, baltimore_total)
+
+baltimore_prop |>
+  broom::tidy() |>
+  select(estimate, conf.low, conf.high)
+```
+
+- Now run prop.test for each of the cities in your dataset, and extract both the proportion of unsolved homicides and the confidence interval for each. Do this within a “tidy” pipeline, making use of purrr::map, purrr::map2, list columns and unnest as necessary to create a tidy dataframe with estimated proportions and CIs for each city.
+
+```{r}
+city_prop = function(city){
+  
+  city_df = homicide_df |>
+    filter(city_state == !!city)
+  
+  city_total = nrow(city_df)
+  city_unsolved = sum(city_df$disposition %in% c("Closed without arrest", "Open/No arrest"))
+  
+  city_prop_test = prop.test(city_unsolved, city_total)
+  
+  city_results = city_prop_test |>
+    broom::tidy() |>
+    select(estimate, conf.low, conf.high)
+  
+  return(city_results)
+  
+}
+
+city_prop("Baltimore, MD")
+```
+
+```{r, warning = FALSE}
+city_prop_df = 
+  tibble(
+    distinct(homicide_df, city_state)
+  ) |>
+  mutate(results = map(city_state, city_prop)) |>
+  unnest(results)
+
+city_prop_df
+```
+
+Create a plot that shows the estimates and CIs for each city – check out geom_errorbar for a way to add error bars based on the upper and lower limits. Organize cities according to the proportion of unsolved homicides.
 
 
 
